@@ -476,10 +476,17 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 var httpMethod = httpContext.Request.Method;
                 if (_supportsCorsPreflight && IsCoresPreflight(httpContext, httpMethod, out var accessControlRequestMethod))
                 {
-                    return accessControlRequestMethod == _method ? _corsPreflightDestination : _corsPreflightExitDestination;
+                    return CompareMethod(accessControlRequestMethod, _method) ? _corsPreflightDestination : _corsPreflightExitDestination;
                 }
 
-                return httpMethod == _method ? _destination : _exitDestination;
+                return CompareMethod(httpMethod, _method) ? _destination : _exitDestination;
+
+                static bool CompareMethod(string requestMethod, string endpointMethod)
+                {
+                    // Known methods (GET, POST, PUT, etc) will match by reference.
+                    // Custom methods fallback to ordinal case compare.
+                    return ReferenceEquals(requestMethod, endpointMethod) || StringComparer.OrdinalIgnoreCase.Equals(requestMethod, endpointMethod);
+                }
             }
         }
 
