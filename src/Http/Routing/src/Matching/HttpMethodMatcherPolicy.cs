@@ -372,9 +372,9 @@ namespace Microsoft.AspNetCore.Routing.Matching
 
             if (destinations?.Count == 1)
             {
-                // If there is only a single valid HTTP method then use a simple jump table.
-                // It avoids unnecessary logic for improved performance.
-                return new SimpleHttpMethodPolicyJumpTable(
+                // If there is only a single valid HTTP method then use an optimized jump table.
+                // It avoids unnecessary dictionary lookups with the method name.
+                return new SingleEntryHttpMethodPolicyJumpTable(
                     exitDestination,
                     destinations,
                     corsPreflightExitDestination,
@@ -382,7 +382,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             }
             else
             {
-                return new DefaultHttpMethodPolicyJumpTable(
+                return new DictionaryHttpMethodPolicyJumpTable(
                     exitDestination,
                     destinations,
                     corsPreflightExitDestination,
@@ -442,7 +442,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 !StringValues.IsNullOrEmpty(accessControlRequestMethod);
         }
 
-        private sealed class SimpleHttpMethodPolicyJumpTable : PolicyJumpTable
+        private sealed class SingleEntryHttpMethodPolicyJumpTable : PolicyJumpTable
         {
             private readonly int _exitDestination;
             private readonly string _method;
@@ -452,7 +452,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
 
             private readonly bool _supportsCorsPreflight;
 
-            public SimpleHttpMethodPolicyJumpTable(
+            public SingleEntryHttpMethodPolicyJumpTable(
                 int exitDestination,
                 Dictionary<string, int> destinations,
                 int corsPreflightExitDestination,
@@ -483,7 +483,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             }
         }
 
-        private sealed class DefaultHttpMethodPolicyJumpTable : PolicyJumpTable
+        private sealed class DictionaryHttpMethodPolicyJumpTable : PolicyJumpTable
         {
             private readonly int _exitDestination;
             private readonly Dictionary<string, int>? _destinations;
@@ -492,7 +492,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
 
             private readonly bool _supportsCorsPreflight;
 
-            public DefaultHttpMethodPolicyJumpTable(
+            public DictionaryHttpMethodPolicyJumpTable(
                 int exitDestination,
                 Dictionary<string, int>? destinations,
                 int corsPreflightExitDestination,
