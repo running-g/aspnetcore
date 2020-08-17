@@ -374,11 +374,25 @@ namespace Microsoft.AspNetCore.Routing.Matching
             {
                 // If there is only a single valid HTTP method then use an optimized jump table.
                 // It avoids unnecessary dictionary lookups with the method name.
+                var httpMethodDestination = destinations.Single();
+                var method = httpMethodDestination.Key;
+                var destination = httpMethodDestination.Value;
+                var supportsCorsPreflight = false;
+                var corsPreflightDestination = 0;
+
+                if (corsPreflightDestinations?.Count > 0)
+                {
+                    supportsCorsPreflight = true;
+                    corsPreflightDestination = corsPreflightDestinations.Single().Value;
+                }
+
                 return new SingleEntryHttpMethodPolicyJumpTable(
                     exitDestination,
-                    destinations,
+                    method,
+                    destination,
+                    supportsCorsPreflight,
                     corsPreflightExitDestination,
-                    corsPreflightDestinations);
+                    corsPreflightDestination);
             }
             else
             {
@@ -454,21 +468,18 @@ namespace Microsoft.AspNetCore.Routing.Matching
 
             public SingleEntryHttpMethodPolicyJumpTable(
                 int exitDestination,
-                Dictionary<string, int> destinations,
+                string method,
+                int destination,
+                bool supportsCorsPreflight,
                 int corsPreflightExitDestination,
-                Dictionary<string, int>? corsPreflightDestinations)
+                int corsPreflightDestination)
             {
                 _exitDestination = exitDestination;
+                _method = method;
+                _destination = destination;
+                _supportsCorsPreflight = supportsCorsPreflight;
                 _corsPreflightExitDestination = corsPreflightExitDestination;
-                var destination = destinations.Single();
-                _method = destination.Key;
-                _destination = destination.Value;
-
-                if (corsPreflightDestinations?.Count > 0)
-                {
-                    _supportsCorsPreflight = true;
-                    _corsPreflightDestination = corsPreflightDestinations.Single().Value;
-                }
+                _corsPreflightDestination = corsPreflightDestination;
             }
 
             public override int GetDestination(HttpContext httpContext)
