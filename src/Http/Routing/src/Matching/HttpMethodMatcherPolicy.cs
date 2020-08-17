@@ -370,11 +370,24 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 destinations.Remove(AnyMethod);
             }
 
-            return new HttpMethodPolicyJumpTable(
-                exitDestination,
-                destinations,
-                corsPreflightExitDestination,
-                corsPreflightDestinations);
+            if (destinations?.Count == 1)
+            {
+                // If there is only a single valid HTTP method then use a simple jump table.
+                // It avoids unnecessary logic for improved performance.
+                return new SimpleHttpMethodPolicyJumpTable(
+                    exitDestination,
+                    destinations,
+                    corsPreflightExitDestination,
+                    corsPreflightDestinations);
+            }
+            else
+            {
+                return new DefaultHttpMethodPolicyJumpTable(
+                    exitDestination,
+                    destinations,
+                    corsPreflightExitDestination,
+                    corsPreflightDestinations);
+            }
         }
 
         private Endpoint CreateRejectionEndpoint(IEnumerable<string> httpMethods)
@@ -418,7 +431,59 @@ namespace Microsoft.AspNetCore.Routing.Matching
             return false;
         }
 
-        private class HttpMethodPolicyJumpTable : PolicyJumpTable
+        private static bool IsCoresPreflight(HttpContext httpContext, string httpMethod, out StringValues accessControlRequestMethod)
+        {
+            accessControlRequestMethod = default;
+            var headers = httpContext.Request.Headers;
+
+            return HttpMethods.Equals(httpMethod, PreflightHttpMethod) &&
+                headers.ContainsKey(HeaderNames.Origin) &&
+                headers.TryGetValue(HeaderNames.AccessControlRequestMethod, out accessControlRequestMethod) &&
+                !StringValues.IsNullOrEmpty(accessControlRequestMethod);
+        }
+
+        private sealed class SimpleHttpMethodPolicyJumpTable : PolicyJumpTable
+        {
+            private readonly int _exitDestination;
+            private readonly string _method;
+            private readonly int _destination;
+            private readonly int _corsPreflightExitDestination;
+            private readonly int _corsPreflightDestination;
+
+            private readonly bool _supportsCorsPreflight;
+
+            public SimpleHttpMethodPolicyJumpTable(
+                int exitDestination,
+                Dictionary<string, int> destinations,
+                int corsPreflightExitDestination,
+                Dictionary<string, int>? corsPreflightDestinations)
+            {
+                _exitDestination = exitDestination;
+                _corsPreflightExitDestination = corsPreflightExitDestination;
+                var destination = destinations.Single();
+                _method = destination.Key;
+                _destination = destination.Value;
+
+                if (corsPreflightDestinations?.Count > 0)
+                {
+                    _supportsCorsPreflight = true;
+                    _corsPreflightDestination = corsPreflightDestinations.Single().Value;
+                }
+            }
+
+            public override int GetDestination(HttpContext httpContext)
+            {
+                var httpMethod = httpContext.Request.Method;
+                if (_supportsCorsPreflight && IsCoresPreflight(httpContext, httpMethod, out var accessControlRequestMethod))
+                {
+                    return accessControlRequestMethod == _method ? _corsPreflightDestination : _corsPreflightExitDestination;
+                }
+
+                return httpMethod == _method ? _destination : _exitDestination;
+            }
+        }
+
+        private sealed class DefaultHttpMethodPolicyJumpTable : PolicyJumpTable
         {
             private readonly int _exitDestination;
             private readonly Dictionary<string, int>? _destinations;
@@ -427,7 +492,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
 
             private readonly bool _supportsCorsPreflight;
 
-            public HttpMethodPolicyJumpTable(
+            public DefaultHttpMethodPolicyJumpTable(
                 int exitDestination,
                 Dictionary<string, int>? destinations,
                 int corsPreflightExitDestination,
@@ -446,15 +511,9 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 int destination;
 
                 var httpMethod = httpContext.Request.Method;
-                var headers = httpContext.Request.Headers;
-                if (_supportsCorsPreflight &&
-                    HttpMethods.Equals(httpMethod, PreflightHttpMethod) &&
-                    headers.ContainsKey(HeaderNames.Origin) &&
-                    headers.TryGetValue(HeaderNames.AccessControlRequestMethod, out var accessControlRequestMethod) &&
-                    !StringValues.IsNullOrEmpty(accessControlRequestMethod))
+                if (_supportsCorsPreflight && IsCoresPreflight(httpContext, httpMethod, out var accessControlRequestMethod))
                 {
-                    return _corsPreflightDestinations != null &&
-                        _corsPreflightDestinations.TryGetValue(accessControlRequestMethod, out destination)
+                    return _corsPreflightDestinations!.TryGetValue(accessControlRequestMethod, out destination)
                         ? destination
                         : _corsPreflightExitDestination;
                 }
