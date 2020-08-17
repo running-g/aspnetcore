@@ -431,7 +431,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             return false;
         }
 
-        private static bool IsCoresPreflight(HttpContext httpContext, string httpMethod, out StringValues accessControlRequestMethod)
+        private static bool IsCorsPreflightRequest(HttpContext httpContext, string httpMethod, out StringValues accessControlRequestMethod)
         {
             accessControlRequestMethod = default;
             var headers = httpContext.Request.Headers;
@@ -474,7 +474,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             public override int GetDestination(HttpContext httpContext)
             {
                 var httpMethod = httpContext.Request.Method;
-                if (_supportsCorsPreflight && IsCoresPreflight(httpContext, httpMethod, out var accessControlRequestMethod))
+                if (_supportsCorsPreflight && IsCorsPreflightRequest(httpContext, httpMethod, out var accessControlRequestMethod))
                 {
                     return CompareMethod(accessControlRequestMethod, _method) ? _corsPreflightDestination : _corsPreflightExitDestination;
                 }
@@ -518,7 +518,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 int destination;
 
                 var httpMethod = httpContext.Request.Method;
-                if (_supportsCorsPreflight && IsCoresPreflight(httpContext, httpMethod, out var accessControlRequestMethod))
+                if (_supportsCorsPreflight && IsCorsPreflightRequest(httpContext, httpMethod, out var accessControlRequestMethod))
                 {
                     return _corsPreflightDestinations!.TryGetValue(accessControlRequestMethod, out destination)
                         ? destination
