@@ -386,7 +386,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
                     corsPreflightDestination = corsPreflightDestinations.Single().Value;
                 }
 
-                return new SingleEntryHttpMethodPolicyJumpTable(
+                return new HttpMethodSingleEntryPolicyJumpTable(
                     exitDestination,
                     method,
                     destination,
@@ -396,7 +396,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             }
             else
             {
-                return new DictionaryHttpMethodPolicyJumpTable(
+                return new HttpMethodDictionaryPolicyJumpTable(
                     exitDestination,
                     destinations,
                     corsPreflightExitDestination,
@@ -445,7 +445,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
             return false;
         }
 
-        private static bool IsCorsPreflightRequest(HttpContext httpContext, string httpMethod, out StringValues accessControlRequestMethod)
+        public static bool IsCorsPreflightRequest(HttpContext httpContext, string httpMethod, out StringValues accessControlRequestMethod)
         {
             accessControlRequestMethod = default;
             var headers = httpContext.Request.Headers;
@@ -454,91 +454,6 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 headers.ContainsKey(HeaderNames.Origin) &&
                 headers.TryGetValue(HeaderNames.AccessControlRequestMethod, out accessControlRequestMethod) &&
                 !StringValues.IsNullOrEmpty(accessControlRequestMethod);
-        }
-
-        private sealed class SingleEntryHttpMethodPolicyJumpTable : PolicyJumpTable
-        {
-            private readonly int _exitDestination;
-            private readonly string _method;
-            private readonly int _destination;
-            private readonly int _corsPreflightExitDestination;
-            private readonly int _corsPreflightDestination;
-
-            private readonly bool _supportsCorsPreflight;
-
-            public SingleEntryHttpMethodPolicyJumpTable(
-                int exitDestination,
-                string method,
-                int destination,
-                bool supportsCorsPreflight,
-                int corsPreflightExitDestination,
-                int corsPreflightDestination)
-            {
-                _exitDestination = exitDestination;
-                _method = method;
-                _destination = destination;
-                _supportsCorsPreflight = supportsCorsPreflight;
-                _corsPreflightExitDestination = corsPreflightExitDestination;
-                _corsPreflightDestination = corsPreflightDestination;
-            }
-
-            public override int GetDestination(HttpContext httpContext)
-            {
-                var httpMethod = httpContext.Request.Method;
-                if (_supportsCorsPreflight && IsCorsPreflightRequest(httpContext, httpMethod, out var accessControlRequestMethod))
-                {
-                    return CompareMethod(accessControlRequestMethod, _method) ? _corsPreflightDestination : _corsPreflightExitDestination;
-                }
-
-                return CompareMethod(httpMethod, _method) ? _destination : _exitDestination;
-
-                static bool CompareMethod(string requestMethod, string endpointMethod)
-                {
-                    // Known methods (GET, POST, PUT, etc) will match by reference.
-                    // Custom methods fallback to ignore case compare.
-                    return ReferenceEquals(requestMethod, endpointMethod) || StringComparer.OrdinalIgnoreCase.Equals(requestMethod, endpointMethod);
-                }
-            }
-        }
-
-        private sealed class DictionaryHttpMethodPolicyJumpTable : PolicyJumpTable
-        {
-            private readonly int _exitDestination;
-            private readonly Dictionary<string, int>? _destinations;
-            private readonly int _corsPreflightExitDestination;
-            private readonly Dictionary<string, int>? _corsPreflightDestinations;
-
-            private readonly bool _supportsCorsPreflight;
-
-            public DictionaryHttpMethodPolicyJumpTable(
-                int exitDestination,
-                Dictionary<string, int>? destinations,
-                int corsPreflightExitDestination,
-                Dictionary<string, int>? corsPreflightDestinations)
-            {
-                _exitDestination = exitDestination;
-                _destinations = destinations;
-                _corsPreflightExitDestination = corsPreflightExitDestination;
-                _corsPreflightDestinations = corsPreflightDestinations;
-
-                _supportsCorsPreflight = _corsPreflightDestinations != null && _corsPreflightDestinations.Count > 0;
-            }
-
-            public override int GetDestination(HttpContext httpContext)
-            {
-                int destination;
-
-                var httpMethod = httpContext.Request.Method;
-                if (_supportsCorsPreflight && IsCorsPreflightRequest(httpContext, httpMethod, out var accessControlRequestMethod))
-                {
-                    return _corsPreflightDestinations!.TryGetValue(accessControlRequestMethod, out destination)
-                        ? destination
-                        : _corsPreflightExitDestination;
-                }
-
-                return _destinations != null &&
-                    _destinations.TryGetValue(httpMethod, out destination) ? destination : _exitDestination;
-            }
         }
 
         private class HttpMethodMetadataEndpointComparer : EndpointMetadataComparer<IHttpMethodMetadata>
