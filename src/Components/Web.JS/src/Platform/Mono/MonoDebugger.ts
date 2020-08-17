@@ -3,10 +3,17 @@ import { WebAssemblyResourceLoader } from '../WebAssemblyResourceLoader';
 const currentBrowserIsChrome = (window as any).chrome
   && navigator.userAgent.indexOf('Edge') < 0; // Edge pretends to be Chrome
 
+let isDebugging = true;
+
+window.addEventListener('load', () => {
+  const params = new URLSearchParams(window.location.search);
+  isDebugging = params.get('_blazor_debug') === 'true';
+})
+
 let hasReferencedPdbs = false;
 
 export function hasDebuggingEnabled() {
-  return hasReferencedPdbs && currentBrowserIsChrome;
+  return isDebugging && hasReferencedPdbs && currentBrowserIsChrome;
 }
 
 export function attachDebuggerHotkey(resourceLoader: WebAssemblyResourceLoader) {
