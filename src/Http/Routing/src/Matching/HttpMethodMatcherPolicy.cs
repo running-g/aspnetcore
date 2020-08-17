@@ -484,7 +484,7 @@ namespace Microsoft.AspNetCore.Routing.Matching
                 static bool CompareMethod(string requestMethod, string endpointMethod)
                 {
                     // Known methods (GET, POST, PUT, etc) will match by reference.
-                    // Custom methods fallback to ordinal case compare.
+                    // Custom methods fallback to ignore case compare.
                     return ReferenceEquals(requestMethod, endpointMethod) || StringComparer.OrdinalIgnoreCase.Equals(requestMethod, endpointMethod);
                 }
             }
